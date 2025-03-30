@@ -54,7 +54,18 @@ def reward(info: dict) -> float:
     steps_remaining = info["steps_remaining"]
     new_cell_covered = info["new_cell_covered"]
     game_over = info["game_over"]
+     # Strategy A: Exploration + Penalty for Detection
+  
+    if info["game_over"] and len(info["enemies"]) > 0:
+        return -50
 
+    if info["new_cell_covered"]:
+        return 10  # Reward for discovering a new cell
+
+    return -0.1  # Small step penalty to encourage efficient exploration
+
+    # Default fallback
+    return 0
     # IMPORTANT: You may design a reward function that uses just some of these values. Experiment with different
     # rewards and find out what works best for the algorithm you chose given the observation space you are using
 
