@@ -171,69 +171,19 @@ def reward(info: dict) -> float:
     steps_remaining = info["steps_remaining"]
     new_cell_covered = info["new_cell_covered"]
     game_over = info["game_over"]
-    
-    # Base reward components
-    reward_value = 0
-    
-    # Large reward for covering new cells to encourage exploration
-    if new_cell_covered:
-        reward_value += 50  # Increased from 10 to 50
-    
-    # Penalty for revisiting cells (when not covering new cells)
-    elif not new_cell_covered:
-        reward_value -= 2  # Increased from 0.5 to 2
-    
-    # Severe penalty for game over (being seen by enemy)
-    if game_over:
-        reward_value -= 100  # Increased from 20 to 100
-    
-    # Small penalty for each step to encourage efficiency
-    reward_value -= 1  # Reduced from 2 to 1
-    
-    # Massive bonus for completing coverage
-    if cells_remaining == 0:
-        reward_value += 500  # Increased from 100 to 500
-    
-    # Additional bonus based on coverage progress
-    coverage_ratio = total_covered_cells / coverable_cells
-    reward_value += coverage_ratio * 50  # Increased from 5 to 50
-    
-    # Penalty for running out of steps
-    if steps_remaining <= 0:
-        reward_value -= 50  # Increased from 20 to 50
-    
-    # Reward for enemy avoidance
-    agent_pos_tuple = (agent_pos // 10, agent_pos % 10)
-    
-    # Calculate distance to nearest enemy
-    min_enemy_dist = float('inf')
-    for enemy in enemies:
-        dist = abs(enemy.x - agent_pos_tuple[0]) + abs(enemy.y - agent_pos_tuple[1])
-        min_enemy_dist = min(min_enemy_dist, dist)
-    
-    # Reward for maintaining safe distance from enemies
-    if min_enemy_dist > 3:
-        reward_value += 10  # Increased from 5 to 10
-    elif min_enemy_dist <= 2:
-        reward_value -= 20  # Increased from 8 to 20
-    
-    # Calculate how many enemies can see the agent
-    visible_enemies = 0
-    for enemy in enemies:
-        if agent_pos_tuple in enemy.fov_cells:
-            visible_enemies += 1
-    
-    # Penalty for being in enemy view
-    if visible_enemies > 0:
-        reward_value -= visible_enemies * 15  # Increased from 5 to 15 per enemy
-    
-    # Reward for moving towards uncovered areas
-    if hasattr(reward, 'prev_coverage'):
-        coverage_increase = total_covered_cells - reward.prev_coverage
-        if coverage_increase > 0:
-            reward_value += coverage_increase * 10  # Additional reward for covering multiple cells
-    
-    # Store current coverage for next step
-    reward.prev_coverage = total_covered_cells
-    
-    return reward_value
+     # Strategy A: Exploration + Penalty for Detection
+  
+    if info["game_over"] and len(info["enemies"]) > 0:
+        return -50
+
+    if info["new_cell_covered"]:
+        return 10  # Reward for discovering a new cell
+
+    return -0.1  # Small step penalty to encourage efficient exploration
+
+    # Default fallback
+    return 0
+    # IMPORTANT: You may design a reward function that uses just some of these values. Experiment with different
+    # rewards and find out what works best for the algorithm you chose given the observation space you are using
+
+    return 0
