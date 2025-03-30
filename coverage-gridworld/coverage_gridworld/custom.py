@@ -10,23 +10,140 @@ def observation_space(env: gym.Env) -> gym.spaces.Space:
     """
     Observation space from Gymnasium (https://gymnasium.farama.org/api/spaces/)
     """
-    # The grid has (10, 10, 3) shape and can store values from 0 to 255 (uint8). To use the whole grid as the
-    # observation space, we can consider a MultiDiscrete space with values in the range [0, 256).
-    cell_values = env.grid + 256
-
-    # if MultiDiscrete is used, it's important to flatten() numpy arrays!
-    return gym.spaces.MultiDiscrete(cell_values.flatten())
+    grid_size = env.metadata["grid_size"]
+    
+    # Agent position (2 values: x, y)
+    agent_space = gym.spaces.Box(low=0, high=grid_size-1, shape=(2,), dtype=np.int32)
+    
+    # Enemy information (x, y, orientation for each enemy)
+    num_enemies = getattr(env, 'num_enemies', 5)
+    enemy_space = gym.spaces.Box(low=0, high=grid_size-1, shape=(num_enemies * 3,), dtype=np.int32)
+    
+    # Local grid state (5x5 grid around agent for better context)
+    local_grid_space = gym.spaces.Box(low=0, high=1, shape=(5, 5), dtype=np.int32)
+    
+    # Global grid state (binary: covered/uncovered)
+    global_grid_space = gym.spaces.Box(low=0, high=1, shape=(grid_size, grid_size), dtype=np.int32)
+    
+    # Enemy view cones (binary: 1 if cell is in enemy view)
+    enemy_view_space = gym.spaces.Box(low=0, high=1, shape=(grid_size, grid_size), dtype=np.int32)
+    
+    # Distance to nearest enemy
+    nearest_enemy_space = gym.spaces.Box(low=0, high=grid_size*2, shape=(1,), dtype=np.int32)
+    
+    # Coverage progress (2 values: total covered, cells remaining)
+    coverage_space = gym.spaces.Box(low=0, high=grid_size*grid_size, shape=(2,), dtype=np.int32)
+    
+    # Direction to nearest uncovered cell (2 values: dx, dy)
+    direction_space = gym.spaces.Box(low=-grid_size, high=grid_size, shape=(2,), dtype=np.int32)
+    
+    return gym.spaces.Dict({
+        'agent': agent_space,
+        'enemies': enemy_space,
+        'local_grid': local_grid_space,
+        'global_grid': global_grid_space,
+        'enemy_view': enemy_view_space,
+        'nearest_enemy': nearest_enemy_space,
+        'coverage': coverage_space,
+        'direction': direction_space
+    })
 
 
 def observation(grid: np.ndarray):
     """
     Function that returns the observation for the current state of the environment.
     """
-    # If the observation returned is not the same shape as the observation_space, an error will occur!
-    # Make sure to make changes to both functions accordingly.
+    # Extract agent position (GREY color)
+    agent_pos = np.where(np.all(grid == [160, 161, 161], axis=2))
+    if len(agent_pos[0]) == 0:
+        agent_pos = np.array([0, 0], dtype=np.int32)
+    else:
+        agent_pos = np.array([agent_pos[0][0], agent_pos[1][0]], dtype=np.int32)
+    
+    # Extract enemy positions (GREEN color)
+    enemy_positions = np.where(np.all(grid == [31, 198, 0], axis=2))
+    enemy_positions = np.array([enemy_positions[0], enemy_positions[1]], dtype=np.int32).T
+    
+    # Pad enemy positions if less than 5 enemies
+    num_enemies = 5
+    if len(enemy_positions) < num_enemies:
+        padding = np.zeros((num_enemies - len(enemy_positions), 2), dtype=np.int32)
+        enemy_positions = np.vstack([enemy_positions, padding]).astype(np.int32)
+    
+    # Add dummy orientation (0) for each enemy
+    enemy_orientations = np.zeros(num_enemies, dtype=np.int32)
+    enemy_info = np.column_stack([enemy_positions, enemy_orientations]).astype(np.int32)
+    
+    # Create local 5x5 grid around agent
+    local_grid = np.zeros((5, 5), dtype=np.int32)
+    for i in range(-2, 3):
+        for j in range(-2, 3):
+            x, y = agent_pos[0] + i, agent_pos[1] + j
+            if 0 <= x < grid.shape[0] and 0 <= y < grid.shape[1]:
+                if np.all(grid[x, y] == [255, 255, 255]):  # WHITE color
+                    local_grid[i+2, j+2] = 1
+    
+    # Create global binary grid state
+    global_grid = np.zeros_like(grid[:,:,0], dtype=np.int32)
+    covered_cells = np.where(np.all(grid == [255, 255, 255], axis=2))
+    global_grid[covered_cells[0], covered_cells[1]] = 1
+    
+    # Create enemy view map (simplified version without actual enemy view cones)
+    enemy_view = np.zeros_like(grid[:,:,0], dtype=np.int32)
+    for i in range(len(enemy_positions)):
+        if not np.all(enemy_positions[i] == 0):  # If not a padded enemy
+            # Mark cells around enemy as potentially visible
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    x, y = enemy_positions[i][0] + dx, enemy_positions[i][1] + dy
+                    if 0 <= x < grid.shape[0] and 0 <= y < grid.shape[1]:
+                        enemy_view[x, y] = 1
+    
+    # Calculate distance to nearest enemy
+    if len(enemy_positions) > 0:
+        distances = np.sqrt(np.sum((enemy_positions - agent_pos)**2, axis=1))
+        nearest_enemy = np.array([np.min(distances)], dtype=np.int32)
+    else:
+        nearest_enemy = np.array([grid.shape[0] * 2], dtype=np.int32)
+    
+    # Calculate coverage progress
+    total_covered = np.sum(global_grid)
+    cells_remaining = np.sum(global_grid == 0)
+    coverage = np.array([total_covered, cells_remaining], dtype=np.int32)
+    
+    # Calculate direction to nearest uncovered cell
+    uncovered_cells = np.where(global_grid == 0)
+    if len(uncovered_cells[0]) > 0:
+        # Find the closest uncovered cell
+        distances = np.sqrt((uncovered_cells[0] - agent_pos[0])**2 + 
+                          (uncovered_cells[1] - agent_pos[1])**2)
+        closest_idx = np.argmin(distances)
+        direction = np.array([
+            uncovered_cells[0][closest_idx] - agent_pos[0],
+            uncovered_cells[1][closest_idx] - agent_pos[1]
+        ], dtype=np.int32)
+    else:
+        direction = np.array([0, 0], dtype=np.int32)
+    
+    return {
+        'agent': agent_pos,
+        'enemies': enemy_info.flatten(),
+        'local_grid': local_grid,
+        'global_grid': global_grid,
+        'enemy_view': enemy_view,
+        'nearest_enemy': nearest_enemy,
+        'coverage': coverage,
+        'direction': direction
+    }
 
-    return grid.flatten()
 
+class RewardTracker:
+    def __init__(self):
+        self.prev_visible_enemies = 0
+        self.prev_pos = (0, 0)
+
+# Create a global tracker instance
+reward_tracker = RewardTracker()
 
 def reward(info: dict) -> float:
     """
@@ -54,8 +171,69 @@ def reward(info: dict) -> float:
     steps_remaining = info["steps_remaining"]
     new_cell_covered = info["new_cell_covered"]
     game_over = info["game_over"]
-
-    # IMPORTANT: You may design a reward function that uses just some of these values. Experiment with different
-    # rewards and find out what works best for the algorithm you chose given the observation space you are using
-
-    return 0
+    
+    # Base reward components
+    reward_value = 0
+    
+    # Large reward for covering new cells to encourage exploration
+    if new_cell_covered:
+        reward_value += 50  # Increased from 10 to 50
+    
+    # Penalty for revisiting cells (when not covering new cells)
+    elif not new_cell_covered:
+        reward_value -= 2  # Increased from 0.5 to 2
+    
+    # Severe penalty for game over (being seen by enemy)
+    if game_over:
+        reward_value -= 100  # Increased from 20 to 100
+    
+    # Small penalty for each step to encourage efficiency
+    reward_value -= 1  # Reduced from 2 to 1
+    
+    # Massive bonus for completing coverage
+    if cells_remaining == 0:
+        reward_value += 500  # Increased from 100 to 500
+    
+    # Additional bonus based on coverage progress
+    coverage_ratio = total_covered_cells / coverable_cells
+    reward_value += coverage_ratio * 50  # Increased from 5 to 50
+    
+    # Penalty for running out of steps
+    if steps_remaining <= 0:
+        reward_value -= 50  # Increased from 20 to 50
+    
+    # Reward for enemy avoidance
+    agent_pos_tuple = (agent_pos // 10, agent_pos % 10)
+    
+    # Calculate distance to nearest enemy
+    min_enemy_dist = float('inf')
+    for enemy in enemies:
+        dist = abs(enemy.x - agent_pos_tuple[0]) + abs(enemy.y - agent_pos_tuple[1])
+        min_enemy_dist = min(min_enemy_dist, dist)
+    
+    # Reward for maintaining safe distance from enemies
+    if min_enemy_dist > 3:
+        reward_value += 10  # Increased from 5 to 10
+    elif min_enemy_dist <= 2:
+        reward_value -= 20  # Increased from 8 to 20
+    
+    # Calculate how many enemies can see the agent
+    visible_enemies = 0
+    for enemy in enemies:
+        if agent_pos_tuple in enemy.fov_cells:
+            visible_enemies += 1
+    
+    # Penalty for being in enemy view
+    if visible_enemies > 0:
+        reward_value -= visible_enemies * 15  # Increased from 5 to 15 per enemy
+    
+    # Reward for moving towards uncovered areas
+    if hasattr(reward, 'prev_coverage'):
+        coverage_increase = total_covered_cells - reward.prev_coverage
+        if coverage_increase > 0:
+            reward_value += coverage_increase * 10  # Additional reward for covering multiple cells
+    
+    # Store current coverage for next step
+    reward.prev_coverage = total_covered_cells
+    
+    return reward_value
