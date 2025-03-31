@@ -4,7 +4,18 @@ import gymnasium as gym
 """
 Feel free to modify the functions below and experiment with different environment configurations.
 """
+OBSERVATION_MODE = "window"
+REWARD_FUNCTION = "rf3"
+GRID_SIZE = 10
 
+# Define colors (same as in env.py)
+WHITE = np.array([255, 255, 255], dtype=np.uint8)  # explored cell
+GREY = np.array([160, 161, 161], dtype=np.uint8)     # agent cell
+BROWN = np.array([101, 67, 33], dtype=np.uint8)      # wall
+# ------------------------------------------------------- #
+
+# Global variable to track the last agent position (used in rf1 and rf3)
+LAST_AGENT_POS = None
 
 def observation_space(env: gym.Env) -> gym.spaces.Space:
     """
@@ -12,10 +23,8 @@ def observation_space(env: gym.Env) -> gym.spaces.Space:
     """
     # The grid has (10, 10, 3) shape and can store values from 0 to 255 (uint8). To use the whole grid as the
     # observation space, we can consider a MultiDiscrete space with values in the range [0, 256).
-    cell_values = env.grid + 256
-
-    # if MultiDiscrete is used, it's important to flatten() numpy arrays!
-    return gym.spaces.MultiDiscrete(cell_values.flatten())
+    window_size = 9  # updated from 5 to 7
+    return gym.spaces.Box(low=0.0, high=1.0, shape=(window_size, window_size, 3), dtype=np.float32)
 
 
 def observation(grid: np.ndarray):
@@ -24,8 +33,36 @@ def observation(grid: np.ndarray):
     """
     # If the observation returned is not the same shape as the observation_space, an error will occur!
     # Make sure to make changes to both functions accordingly.
+    window_size = 9  # updated from 5 to 7
+    half_window = window_size // 2  # now 3
 
-    return grid.flatten()
+    # Find agent position (assumes one GREY cell)
+    agent_positions = np.argwhere(np.all(grid == GREY, axis=2))
+    if agent_positions.shape[0] > 0:
+        agent_row, agent_col = agent_positions[0]
+    else:
+        agent_row, agent_col = 0, 0
+
+    # Pad the grid to allow extraction near edges
+    padded_grid = np.pad(
+        grid,
+        ((half_window, half_window), (half_window, half_window), (0, 0)),
+        mode='constant',
+        constant_values=0
+    )
+    # Adjust agent position for padding
+    agent_row_p = agent_row + half_window
+    agent_col_p = agent_col + half_window
+
+    local_view = padded_grid[
+        agent_row_p - half_window: agent_row_p + half_window + 1,
+        agent_col_p - half_window: agent_col_p + half_window + 1
+    ]
+
+    # Normalize RGB to [0,1]
+    local_view = local_view.astype(np.float32) / 255.0
+    return local_view
+    # return grid.flatten()
 
 
 def reward(info: dict) -> float:
@@ -48,21 +85,27 @@ def reward(info: dict) -> float:
     """
     enemies = info["enemies"]
     agent_pos = info["agent_pos"]
-    total_covered_cells = info["total_covered_cells"]
+    total_covered_cells = total_covered_cells = info["total_covered_cells"]
     cells_remaining = info["cells_remaining"]
     coverable_cells = info["coverable_cells"]
     steps_remaining = info["steps_remaining"]
     new_cell_covered = info["new_cell_covered"]
     game_over = info["game_over"]
      # Strategy A: Exploration + Penalty for Detection
-  
-    if info["game_over"] and len(info["enemies"]) > 0:
-        return -50
-
+    r = 0
     if info["new_cell_covered"]:
-        return 10  # Reward for discovering a new cell
+        r += 15 
+    else:
+        r-= 2
+    if info["game_over"] and len(info["enemies"]) > 0:
+        r-=30
+    if info.get("total_covered_cells") == info.get("coverable_cells"):
+        r += 500
 
-    return -0.1  # Small step penalty to encourage efficient exploration
+    if info['steps_remaining'] == 0 and not (info.get("total_covered_cells") == info.get("coverable_cells")):
+        r-= 100 
+    r += 0.2
+    return r
 
     # Default fallback
     return 0
