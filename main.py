@@ -1,7 +1,7 @@
 import random
 import time
 import gymnasium
-import coverage_gridworld  # must be imported, even though it's not directly referenced
+import coverage_gridworld # must be imported, even though it's not directly referenced
 
 
 def human_player():
