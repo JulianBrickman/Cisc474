@@ -173,21 +173,12 @@ from datetime import datetime
 reward_functions = ["rf3"]
 coverage_gridworld.custom.OBSERVATION_MODE = "window"
 training_phases = [
-    # "just_go",
-    # "safe",
-    # "maze",
-    # "chokepoint",
     "sneaky_enemies",
-     "sneaky_enemies",
-      "sneaky_enemies",
+    "sneaky_enemies",
+    "sneaky_enemies",
 ]
 
 phase_learning_rates = {
-    # "just_go": 5e-4,
-    # "safe": 5e-4,
-    # "maze": 4e-4,
-    # "chokepoint": 5e-4,
-    # "sneaky_enemies": 5e-4
     "sneaky_enemies_1": 5e-4,  # Normal LR to kickstart
     "sneaky_enemies_2": 3e-4,  # Slightly lower to refine
     "sneaky_enemies_3": 2e-4
@@ -196,44 +187,59 @@ phase_learning_rates = {
 LEARNING_RATE = 4e-4
 ENTROPY_COEF = 0.01
 render_list = []
-n_envs = 8
+n_envs = 64
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_dir = f"./training_logs2_{timestamp}"
-model_dir = f"./models-{timestamp}"
+
+# Create a single base directory for this training run
+base_dir = f"training_run_{timestamp}"
+log_dir = os.path.join(base_dir, "logs")
+model_dir = os.path.join(base_dir, "models")
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 
 # ---------------- Logging Setup ---------------- #
 
-
 def setup_logger():
     logger = logging.getLogger("train_logger")
     logger.setLevel(logging.INFO)
+    
+    # Clear any existing handlers
     if logger.hasHandlers():
         logger.handlers.clear()
+    
+    # Create formatters
+    file_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    console_formatter = logging.Formatter("%(message)s")
+    
+    # File handler for detailed logs
     fh = logging.FileHandler(os.path.join(log_dir, "training.log"), mode="w")
     fh.setLevel(logging.INFO)
+    fh.setFormatter(file_formatter)
+    
+    # Console handler for cleaner output
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.INFO)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
+    ch.setFormatter(console_formatter)
+    
+    # Add handlers
     logger.addHandler(fh)
     logger.addHandler(ch)
-
+    
+    # Log initial setup
+    logger.info(f"Training run started at {timestamp}")
+    logger.info(f"Log directory: {log_dir}")
+    logger.info(f"Model directory: {model_dir}")
 
 def get_logger():
     return logging.getLogger("train_logger")
 
 # ---------------- Helper Functions ---------------- #
 
-
 def make_env_func(env_tag, render_mode, monitor_log_path):
     env = gym.make(env_tag, render_mode=render_mode,
                    predefined_map_list=None, activate_game_status=False)
     env = Monitor(env, filename=monitor_log_path, allow_early_resets=True)
     return env
-
 
 def compute_l2_norm(model):
     l2_norm = sum(param.data.norm(2).item() **
@@ -242,7 +248,6 @@ def compute_l2_norm(model):
     return l2_norm
 
 # ---------------- Plateau LR and Training Callback ---------------- #
-
 
 class PlateauLRCallback(BaseCallback):
     def __init__(self, patience=8, lr_factor=0.7, max_decreases=4, improvement_threshold=1.0, reward_window=8, warmup_rollouts=10, alpha=0.4, verbose=1):
@@ -304,8 +309,7 @@ class PlateauLRCallback(BaseCallback):
 
 # ---------------- Training Functions ---------------- #
 
-
-def train_phase(model, phase_env_fns, phase_name, initial_timesteps=100000):
+def train_phase(model, phase_env_fns, phase_name, initial_timesteps=10000000):
     plateau_callback = PlateauLRCallback()
     plateau_callback.ewma_baseline = None
     plateau_callback.wait = 0
@@ -327,8 +331,7 @@ def train_phase(model, phase_env_fns, phase_name, initial_timesteps=100000):
     get_logger().info(f"--- Phase {phase_name} completed due to plateau ---")
     return model
 
-
-def rehearsal_phase(model, seen_envs, rehearsal_timesteps=100000, n_envs=4):
+def rehearsal_phase(model, seen_envs, rehearsal_timesteps=100000, n_envs=64):
     get_logger().info("Starting multi-map rehearsal phase")
 
     def mixed_env():
@@ -346,29 +349,38 @@ def rehearsal_phase(model, seen_envs, rehearsal_timesteps=100000, n_envs=4):
 
 # ---------------- Main Training Loop ---------------- #
 
-
 def main():
     setup_logger()
     seen_envs = []
     for rf in reward_functions:
         get_logger().info(f"\n===== Training with Reward Function: {rf} =====")
+        
         coverage_gridworld.custom.REWARD_FUNCTION = rf
-        model_file = "./models/ppo_coverage_gridworld_rf3.zip"
-        model = PPO.load(model_file)  # Load without env for now
+        model_file = "./training_run_20250331_163031/models/ppo_sneaky_enemies_phase3.zip"
+        
         for phase_idx, env_tag in enumerate(training_phases):
             render = "human" if env_tag in render_list else None
-            phase_name = f"{env_tag}_phase{phase_idx+1}_{timestamp}"
+            phase_name = f"{env_tag}_phase{phase_idx+1}"
             seen_envs.append(env_tag)
 
-            monitor_log_path = os.path.join(
-                log_dir, f"monitor_{rf}_{env_tag}_phase{phase_idx+1}+{timestamp}.csv")
+            # Simplified monitor log path
+            monitor_log_path = os.path.join(log_dir, f"monitor_{rf}_{phase_name}.csv")
 
             # Create vectorized envs
             env_fns = [lambda: make_env_func(env_tag, render, monitor_log_path) for _ in range(n_envs)]
             vec_env = SubprocVecEnv(env_fns)
 
-            # Set the environment to the loaded model
-            model.set_env(vec_env)
+            # Initialize or load model
+            if phase_idx == 0:
+                if os.path.exists(model_file + ".zip"):
+                    get_logger().info(f"Loading existing model from {model_file}")
+                    model = PPO.load(model_file, env=vec_env)
+                else:
+                    get_logger().info("Creating new model")
+                    model = PPO("MultiInputPolicy", vec_env, verbose=1, 
+                              learning_rate=LEARNING_RATE, ent_coef=ENTROPY_COEF)
+            else:
+                model.set_env(vec_env)
 
             # Adjust learning rate dynamically for each phase
             phase_key = f"{env_tag}_{phase_idx+1}"
@@ -376,25 +388,25 @@ def main():
             for param_group in model.policy.optimizer.param_groups:
                 param_group['lr'] = phase_lr
             model.learning_rate = phase_lr
-            for param_group in model.policy.optimizer.param_groups:
-                param_group['lr'] = phase_lr
-            model.learning_rate = phase_lr
             model.lr_schedule = lambda progress: phase_lr
-            get_logger().info(
-                f"Reset learning rate to {phase_lr:.1e} for phase {phase_name}.")
+            get_logger().info(f"Reset learning rate to {phase_lr:.1e} for phase {phase_name}")
+            
+            # Train the phase
             model = train_phase(model, env_fns, phase_name)
+            
+            # Save model after each phase
             model.save(os.path.join(model_dir, f"ppo_{phase_name}"))
             compute_l2_norm(model)
-            model.save(model_file)
+            
             if len(seen_envs) > 1:
                 model = rehearsal_phase(
                     model, seen_envs[:-1], rehearsal_timesteps=100000, n_envs=n_envs)
-                model.save(model_file)
-                get_logger().info(
-                    f"Model updated after rehearsal saved to {model_file}")
+                model.save(os.path.join(model_dir, f"ppo_{phase_name}_after_rehearsal"))
+                get_logger().info(f"Model updated after rehearsal saved to {os.path.join(model_dir, f'ppo_{phase_name}_after_rehearsal')}")
+        
         get_logger().info(f"Training completed for reward function: {rf}")
+    
     get_logger().info("\nAll training completed.")
-
 
 if __name__ == '__main__':
     freeze_support()

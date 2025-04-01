@@ -74,7 +74,7 @@ def render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.1):
 
 if __name__ == "__main__":
     # Load PPO model
-    model_path = "./models/ppo_coverage_gridworld_rf3.zip"
+    model_path = "./training_run_20250331_163031/models/ppo_sneaky_enemies_phase2.zip"
     model = PPO.load(model_path)
     render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.2)
     # List of environments to evaluate
