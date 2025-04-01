@@ -176,8 +176,7 @@ training_phases = [
     # "just_go",
     # "safe",
     # "maze",
-    # "chokepoint",
-    "sneaky_enemies",
+    # "chokepoint"
      "sneaky_enemies",
       "sneaky_enemies",
 ]
@@ -190,7 +189,6 @@ phase_learning_rates = {
     # "sneaky_enemies": 5e-4
     "sneaky_enemies_1": 5e-4,  # Normal LR to kickstart
     "sneaky_enemies_2": 3e-4,  # Slightly lower to refine
-    "sneaky_enemies_3": 2e-4
 }
 
 LEARNING_RATE = 4e-4
@@ -353,7 +351,7 @@ def main():
     for rf in reward_functions:
         get_logger().info(f"\n===== Training with Reward Function: {rf} =====")
         coverage_gridworld.custom.REWARD_FUNCTION = rf
-        model_file = "./models/ppo_coverage_gridworld_rf3.zip"
+        model_file = "./models-20250331_190457/ppo_sneaky_enemies_phase2_20250331_190457+20250331_190457.zip"
         model = PPO.load(model_file)  # Load without env for now
         for phase_idx, env_tag in enumerate(training_phases):
             render = "human" if env_tag in render_list else None
@@ -383,15 +381,15 @@ def main():
             get_logger().info(
                 f"Reset learning rate to {phase_lr:.1e} for phase {phase_name}.")
             model = train_phase(model, env_fns, phase_name)
-            model.save(os.path.join(model_dir, f"ppo_{phase_name}"))
+            model.save(os.path.join(model_dir, f"ppo_{phase_name}+{timestamp}"))
             compute_l2_norm(model)
-            model.save(model_file)
+            model.save(f"model_{timestamp}.h5")
             if len(seen_envs) > 1:
                 model = rehearsal_phase(
                     model, seen_envs[:-1], rehearsal_timesteps=100000, n_envs=n_envs)
                 model.save(model_file)
                 get_logger().info(
-                    f"Model updated after rehearsal saved to {model_file}")
+                    f"Model updated after rehearsal saved to model_{timestamp}.h5")
         get_logger().info(f"Training completed for reward function: {rf}")
     get_logger().info("\nAll training completed.")
 

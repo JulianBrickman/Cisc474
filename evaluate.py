@@ -74,26 +74,22 @@ def render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.1):
 
 if __name__ == "__main__":
     # Load PPO model
-    model_path = "./models/ppo_coverage_gridworld_rf3.zip"
+    model_path = "models-20250331_190457/ppo_sneaky_enemies_phase2_20250331_190457+20250331_190457.zip"
     model = PPO.load(model_path)
-    render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.2)
-    # List of environments to evaluate
-    # training_phases = [
-    #     "just_go",
-    #     "safe",
-    #     "maze",
-    #     "chokepoint",
-    #     "sneaky_enemies"
-    # ]
+    # render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.2)
+   
+    training_phases = [
+        "sneaky_enemies"
+    ]
 
-    # all_results = {}
+    all_results = {}
 
-    # for env_name in training_phases:
-    #     results = evaluate_model(model, env_name=env_name, episodes=20, render=False)
-    #     df = pd.DataFrame(results)
-    #     csv_filename = f"evaluation_results_{env_name}.csv"
-    #     df.to_csv(csv_filename, index=False)
-    #     print(f"📁 Results saved to '{csv_filename}'")
-    #     all_results[env_name] = df
+    for env_name in training_phases:
+        results = evaluate_model(model, env_name=env_name, episodes=20, render=False)
+        df = pd.DataFrame(results)
+        csv_filename = f"evaluation_results_{env_name}.csv"
+        df.to_csv(csv_filename, index=False)
+        print(f"📁 Results saved to '{csv_filename}'")
+        all_results[env_name] = df
 
     print("\n✅ All evaluations complete.")
