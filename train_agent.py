@@ -303,7 +303,7 @@ class PlateauLRCallback(BaseCallback):
 # ---------------- Training Functions ---------------- #
 
 
-def train_phase(model, phase_env_fns, phase_name, initial_timesteps=100000):
+def train_phase(model, phase_env_fns, phase_name, initial_timesteps=5000000):
     plateau_callback = PlateauLRCallback()
     plateau_callback.ewma_baseline = None
     plateau_callback.wait = 0
@@ -351,8 +351,30 @@ def main():
     for rf in reward_functions:
         get_logger().info(f"\n===== Training with Reward Function: {rf} =====")
         coverage_gridworld.custom.REWARD_FUNCTION = rf
-        model_file = "./models-20250331_190457/ppo_sneaky_enemies_phase2_20250331_190457+20250331_190457.zip"
-        model = PPO.load(model_file)  # Load without env for now
+        
+        # Create a temporary environment with correct number of envs
+        temp_env_fns = [lambda: make_env_func("sneaky_enemies", None, None) for _ in range(n_envs)]
+        temp_env = SubprocVecEnv(temp_env_fns)
+        
+        # Load the existing model
+        #model = PPO.load("models-20250401_222201/ppo_sneaky_enemies_phase2_20250401_222201+20250401_222201.zip", env=temp_env)
+        model = PPO(
+            "MultiInputPolicy",
+            temp_env,
+            learning_rate=3e-4,
+            n_steps=2048,
+            batch_size=64,
+            n_epochs=10,
+            gamma=0.99,
+            gae_lambda=0.95,
+            clip_range=0.2,
+            verbose=1
+        )
+        
+        
+        temp_env.close()  # Close the temporary environment
+        
+        
         for phase_idx, env_tag in enumerate(training_phases):
             render = "human" if env_tag in render_list else None
             phase_name = f"{env_tag}_phase{phase_idx+1}_{timestamp}"
@@ -365,7 +387,7 @@ def main():
             env_fns = [lambda: make_env_func(env_tag, render, monitor_log_path) for _ in range(n_envs)]
             vec_env = SubprocVecEnv(env_fns)
 
-            # Set the environment to the loaded model
+            # Set the environment to the model
             model.set_env(vec_env)
 
             # Adjust learning rate dynamically for each phase
@@ -387,7 +409,7 @@ def main():
             if len(seen_envs) > 1:
                 model = rehearsal_phase(
                     model, seen_envs[:-1], rehearsal_timesteps=100000, n_envs=n_envs)
-                model.save(model_file)
+                model.save(model_dir)
                 get_logger().info(
                     f"Model updated after rehearsal saved to model_{timestamp}.h5")
         get_logger().info(f"Training completed for reward function: {rf}")
