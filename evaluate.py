@@ -74,9 +74,9 @@ def render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.1):
 
 if __name__ == "__main__":
     # Load PPO model
-    model_path = "./models-20250401_234349.zip"
+    model_path = "./models-20250402_204729.zip"
     model = PPO.load(model_path)
-    #render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.2)
+    render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.2)
    
     training_phases = [
         "sneaky_enemies"

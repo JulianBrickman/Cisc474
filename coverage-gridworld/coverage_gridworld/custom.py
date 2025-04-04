@@ -120,6 +120,7 @@ def observation(grid: np.ndarray):
         'prev_pos': prev_pos
     }
 
+
 def reward(info: dict) -> float:
     """
     Function to calculate the reward for the current step based on the state information.
@@ -151,15 +152,18 @@ def reward(info: dict) -> float:
     
     # Calculate coverage multiplier (increases as fewer cells remain)
     coverage_ratio = total_covered_cells / coverable_cells
-    coverage_multiplier = 1.0 + (coverage_ratio * 3.0)  # Multiplier goes from 1.0 to 3.0
+    coverage_multiplier = 1.0 + (coverage_ratio * 5.0)  # Multiplier goes from 1.0 to 3.0
     
     # Strategy A: Exploration + Penalty for Detection
     r = 0
     if info["new_cell_covered"]:
         r += 10 * coverage_multiplier  # Apply multiplier to new cell coverage reward
-    if info["game_over"]:
+    if info["game_over"] and total_covered_cells < 25 :
         # Penalty decreases as more of the map is covered (encourages risk-taking near completion)
-        r -= 40 * (1.0 - coverage_ratio)  # Penalty goes from -50 to 0 as coverage increases
+        r -= 50   # Penalty goes from -50 to 0 as coverage increases
+    if info["game_over"] and total_covered_cells > 25:
+        # Penalty decreases as more of the map is covered (encourages risk-taking near completion)
+        r -= 50 * (1.0 - coverage_ratio)  # Penalty goes from -50 to 0 as coverage increases
     if info.get("total_covered_cells") == info.get("coverable_cells"):
         r += 400
     if info['steps_remaining'] == 0 and not (info.get("total_covered_cells") == info.get("coverable_cells")):
@@ -167,12 +171,16 @@ def reward(info: dict) -> float:
     
     # Add search boost when more than 25 cells are covered
     if total_covered_cells > 60:
-        r += 15 * coverage_multiplier  # Small boost that increases with coverage
+        r += 16 * coverage_multiplier  # Small boost that increases with coverage
     elif total_covered_cells > 40:
-        r += 10 * coverage_multiplier  # Larger boost for higher coverage
+        r += 8 * coverage_multiplier  # Larger boost for higher coverage
     elif total_covered_cells > 25:
-        r += 5 * coverage_multiplier  # Larger boost for higher coverage
+        r += 4 * coverage_multiplier  # Larger boost for higher coverage
+    
+    
+    r-=2 
 
     return r
+
 
     

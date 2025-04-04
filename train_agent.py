@@ -357,9 +357,9 @@ def main():
         temp_env = SubprocVecEnv(temp_env_fns)
         
         # Load the existing model
-        #model = PPO.load("models-20250401_222201/ppo_sneaky_enemies_phase2_20250401_222201+20250401_222201.zip", env=temp_env)
+        #model = PPO.load("models-20250402_194152.zip", env=temp_env)
         model = PPO(
-            "MultiInputPolicy",
+            "MultiInputPolicy",  # Use MultiInputPolicy for dictionary observation space
             temp_env,
             learning_rate=3e-4,
             n_steps=2048,
