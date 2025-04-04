@@ -170,7 +170,7 @@ from datetime import datetime
 
 # ---------------- Global Configuration ---------------- #
 
-reward_functions = ["rf3"]
+reward_functions = ["rf4"]
 coverage_gridworld.custom.OBSERVATION_MODE = "window"
 training_phases = [
     # "just_go",
@@ -178,17 +178,21 @@ training_phases = [
     # "maze",
     # "chokepoint"
      "sneaky_enemies",
-      "sneaky_enemies",
+     "sneaky_enemies",
+     "sneaky_enemies",
+     "sneaky_enemies",
+     "sneaky_enemies",
+     "sneaky_enemies",
+    
 ]
 
 phase_learning_rates = {
-    # "just_go": 5e-4,
-    # "safe": 5e-4,
-    # "maze": 4e-4,
-    # "chokepoint": 5e-4,
-    # "sneaky_enemies": 5e-4
-    "sneaky_enemies_1": 5e-4,  # Normal LR to kickstart
-    "sneaky_enemies_2": 3e-4,  # Slightly lower to refine
+    "sneaky_enemies_1": 4e-4,  # Normal LR to kickstart
+    "sneaky_enemies_2": 3e-4,  # Normal LR to kickstart
+    "sneaky_enemies_3": 2e-4,  # Normal LR to kickstart
+    "sneaky_enemies_4": 1e-4,  # Normal LR to kickstart
+    "sneaky_enemies_5": 5e-5,  # Normal LR to kickstart
+    "sneaky_enemies_6": 4e-5,  # Slightly lower to refine
 }
 
 LEARNING_RATE = 4e-4
@@ -351,11 +355,11 @@ def main():
     for rf in reward_functions:
         get_logger().info(f"\n===== Training with Reward Function: {rf} =====")
         coverage_gridworld.custom.REWARD_FUNCTION = rf
-        model_file = "./models-20250331_190457/ppo_sneaky_enemies_phase2_20250331_190457+20250331_190457.zip"
+        model_file = "model_20250403_110417.h5"
         model = PPO.load(model_file)  # Load without env for now
         for phase_idx, env_tag in enumerate(training_phases):
             render = "human" if env_tag in render_list else None
-            phase_name = f"{env_tag}_phase{phase_idx+1}_{timestamp}"
+            phase_name = f"{env_tag}_phase{phase_idx+1}"
             seen_envs.append(env_tag)
 
             monitor_log_path = os.path.join(
@@ -378,6 +382,7 @@ def main():
                 param_group['lr'] = phase_lr
             model.learning_rate = phase_lr
             model.lr_schedule = lambda progress: phase_lr
+
             get_logger().info(
                 f"Reset learning rate to {phase_lr:.1e} for phase {phase_name}.")
             model = train_phase(model, env_fns, phase_name)
