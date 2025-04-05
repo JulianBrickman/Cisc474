@@ -171,7 +171,8 @@ from datetime import datetime
 # ---------------- Global Configuration ---------------- #
 
 reward_functions = ["rf4"]
-coverage_gridworld.custom.OBSERVATION_MODE = "window"
+#coverage_gridworld.custom.OBSERVATION_MODE = "window"
+coverage_gridworld.custom.OBSERVATION_MODE = "dict"
 training_phases = [
     # "just_go",
     # "safe",
@@ -205,7 +206,7 @@ model_dir = f"./models-{timestamp}"
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 
-# ---------------- Logging Setup ---------------- #
+
 
 
 def setup_logger():
@@ -227,7 +228,6 @@ def setup_logger():
 def get_logger():
     return logging.getLogger("train_logger")
 
-# ---------------- Helper Functions ---------------- #
 
 
 def make_env_func(env_tag, render_mode, monitor_log_path):
@@ -243,7 +243,6 @@ def compute_l2_norm(model):
     get_logger().info(f"L2 norm of model parameters: {l2_norm:.4f}")
     return l2_norm
 
-# ---------------- Plateau LR and Training Callback ---------------- #
 
 
 class PlateauLRCallback(BaseCallback):
@@ -304,8 +303,6 @@ class PlateauLRCallback(BaseCallback):
     def reached_plateau(self) -> bool:
         return self.lr_decrease_count >= self.max_decreases
 
-# ---------------- Training Functions ---------------- #
-
 
 def train_phase(model, phase_env_fns, phase_name, initial_timesteps=100000):
     plateau_callback = PlateauLRCallback()
@@ -345,9 +342,6 @@ def rehearsal_phase(model, seen_envs, rehearsal_timesteps=100000, n_envs=4):
     vec_env.close()
     compute_l2_norm(model)
     return model
-
-# ---------------- Main Training Loop ---------------- #
-
 
 def main():
     setup_logger()
