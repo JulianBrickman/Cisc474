@@ -1,6 +1,6 @@
 import gymnasium as gym
 from stable_baselines3 import PPO
-import coverage_gridworld.envTwo  # Ensure custom envs are registered
+import coverage_gridworld.env  # Ensure custom envs are registered
 import pandas as pd
 import os
 import time
@@ -42,7 +42,7 @@ def evaluate_model(model, env_name="sneaky_enemies", episodes=20, render=False):
     env.close()
 
     # Print summary
-    print(f"\n📊 Evaluation Summary for {env_name}:")
+    print(f"\nEvaluation Summary for {env_name}:")
     avg_reward = sum(r["reward"] for r in results) / episodes
     avg_steps = sum(r["steps"] for r in results) / episodes
     spotted_rate = sum(r["spotted"] for r in results) / episodes
@@ -77,22 +77,10 @@ def render_human_episode(model, env_name="sneaky_enemies", sleep_time=0.1):
 if __name__ == "__main__":
     # List of model file paths
     model_paths = [
-        'model_20250331_190457.h5',
-        'model_20250331_204837.h5',
-        'model_20250331_222729.h5',
-        'model_20250401_011338.h5',
-        'model_20250401_095150.h5',
-        'model_20250401_114221.h5',
-        'model_20250401_134848.h5',
-        'model_20250401_165803.h5',
-        'model_20250401_191253.h5',
-        'model_20250401_234441.h5',
-        'model_20250402_093929.h5',
-        'model_20250402_124240.h5',
-        'model_20250402_153117.h5',
-        'model_20250402_193717.h5',
-        'model_20250403_011102.h5',
+       
+
         'model_20250403_110417.h5',
+        'model_20250401_165803.h5',
         'model_20250403_212015.h5'
     ]
     
@@ -104,7 +92,7 @@ if __name__ == "__main__":
 
     # Loop through model paths and evaluate each one
     for model_path in model_paths:
-        print(f"\n🚀 Evaluating model: {model_path}")
+        print(f"\n Evaluating model: {model_path}")
         model = PPO.load(model_path)
         
         # Store results for each model in a separate dictionary for comparison
@@ -116,10 +104,10 @@ if __name__ == "__main__":
             df = pd.DataFrame(results)
             csv_filename = f"evaluation_test_results_{env_name}_{model_name}.csv"
             df.to_csv(csv_filename, index=False)
-            print(f"📁 Results for model '{model_name}' saved to '{csv_filename}'")
+            print(f"Results for model '{model_name}' saved to '{csv_filename}'")
             all_results[model_name][env_name] = df
 
-    print("\n✅ All evaluations complete.")
+   
 
     # Optionally, you can also combine results from different models into one large DataFrame for comparison:
     combined_results = []
@@ -132,4 +120,4 @@ if __name__ == "__main__":
     combined_df = pd.concat(combined_results, ignore_index=True)
     combined_csv_filename = "combined_evaluation_results.csv"
     combined_df.to_csv(combined_csv_filename, index=False)
-    print(f"📁 Combined results saved to '{combined_csv_filename}'")
+    print(f"Combined results saved to '{combined_csv_filename}'")
